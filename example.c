@@ -1,9 +1,3 @@
-# sb.h
-
-A simple stb-style string builder library for C.
-
-## Example
-```c
 #include <stdio.h>
 
 #define SB_IMPLEMENTATION
@@ -58,4 +52,3 @@ int main(void)
 
     return 0;
 }
-```

@@ -54,19 +54,19 @@ typedef struct {
 } sb_t;
 
 /* Append formatted text (like printf) */
-SBDEF int   sb_appendf(sb_t *sb, const char *fmt, ...) SB_PRINTF_FORMAT(2, 3);
-SBDEF int   sb_vappendf(sb_t *sb, const char *fmt, va_list args);
+SBDEF int sb_appendf(sb_t *sb, const char *fmt, ...) SB_PRINTF_FORMAT(2, 3);
+SBDEF int sb_vappendf(sb_t *sb, const char *fmt, va_list args);
 
 /* Append a raw slice of memory or a single character */
-SBDEF int   sb_append_slice(sb_t *sb, const char *buff, size_t n);
-SBDEF int   sb_append_char(sb_t *sb, char c);
+SBDEF int sb_append_slice(sb_t *sb, const char *buff, size_t n);
+SBDEF int sb_append_char(sb_t *sb, char c);
 
 /* Append a null terminator (count is incremented) */
-SBDEF int   sb_append_null(sb_t *sb);
+SBDEF int sb_append_null(sb_t *sb);
 
 /* Extract content into a buffer (always null-terminated if buff_size > 0) */
-SBDEF int   sb_extract(const sb_t *sb, char *buff, size_t buff_size);
-SBDEF int   sb_extract_slice(const sb_t *sb, size_t n, char *buff, size_t buff_size);
+SBDEF int sb_extract(const sb_t *sb, char *buff, size_t buff_size);
+SBDEF int sb_extract_slice(const sb_t *sb, size_t n, char *buff, size_t buff_size);
 
 /* Allocate a new null-terminated copy of the string */
 SBDEF char* sb_to_cstr(const sb_t *sb);
@@ -75,10 +75,10 @@ SBDEF char* sb_to_cstr(const sb_t *sb);
 SBDEF char* sb_detach(sb_t *sb);
 
 /* Ensure there is enough space for additional bytes */
-SBDEF bool  sb_reserve(sb_t *sb, size_t bytes);
+SBDEF bool sb_reserve(sb_t *sb, size_t bytes);
 
 /* Free the builder's memory and reset to empty */
-SBDEF void  sb_free(sb_t *sb);
+SBDEF void sb_free(sb_t *sb);
 
 #endif // SB_H
 
