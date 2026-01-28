@@ -1,54 +1,46 @@
 #include <stdio.h>
 
-#define SB_IMPLEMENTATION
-#include "sb.h"
+#define SBV_IMPLEMENTATION
+#include "sbv.h"
 
-int main(void)
-{
-    sb_t sb = {0};
+int main(void) {
+    /* --- String builder basics --- */
+    sb_t sb = sb_null();
 
-    // Append formatted text
-    sb_appendf(&sb, "Hello %s!", "world");
+    sb_appendf(&sb, "Hello %s", "world");
+    sb_append_char(&sb, '!');
     sb_append_char(&sb, '\n');
 
-    // Append raw bytes (does not require null-termination)
-    const char raw[] = { 'A', 'B', 'C' };
-    sb_append_slice(&sb, raw, sizeof(raw));
+    const char raw[] = "Raw bytes";
+    sb_append_slice(&sb, raw, sizeof(raw) - 1);
 
-    sb_append_char(&sb, '\n');
+    /* Convert to C string (copy) */
+    char *cstr = sb_to_cstr(&sb);
+    printf("sb_to_cstr:\n%s\n\n", cstr);
+    SBV_FREE(cstr);
 
-    // Append more formatted data
-    for (int i = 0; i < 3; i++) {
-        sb_appendf(&sb, "value[%d] = %d\n", i, i * 10);
-    }
+    /* Detach buffer (takes ownership) */
+    char *detached = sb_detach(&sb);
+    printf("sb_detach:\n%s\n\n", detached);
+    SBV_FREE(detached);
 
-    // Option 1: extract into an existing buffer
-    char buffer[128];
-    sb_extract(&sb, buffer, sizeof(buffer));
-    printf("Extracted:\n%s\n", buffer);
+    /* --- String view usage --- */
+    sv_t text   = sv_from_cstr("one,two,three");
+    sv_t comma  = sv_from_cstr(",");
+    size_t pos  = sv_find(text, comma);
 
-    // Option 2: duplicate as a heap string
-    char *copy = sb_to_cstr(&sb);
-    if (copy) {
-        printf("Duplicated:\n%s\n", copy);
-        free(copy);
-    }
+    sv_t left  = sv_slice(text, 0, pos);
+    sv_t right = sv_chop_left(text, pos + 1);
 
-    // Option 3: detach ownership (no copy)
-    char *owned = sb_detach(&sb);
-    if (owned) {
-        printf("Detached:\n%s\n", owned);
-        free(owned);
-    }
+    printf("sv_find: %zu\n", pos);
+    printf("left:  '%.*s'\n", (int)left.len, left.items);
+    printf("right: '%.*s'\n\n", (int)right.len, right.items);
 
-    // Builder is now empty and reusable
-    // Option 4: use in-place
-    sb_appendf(&sb, "Builder reused.\n");
-    sb_append_null(&sb);
-    printf("After reset:\n%s\n", sb.items);
-
-    // free allocated memory and reset
-    sb_free(&sb);
+    /* Prefix / suffix checks */
+    printf("starts with 'one'? %d\n",
+           sv_starts_with(text, sv_from_cstr("one")));
+    printf("ends with 'three'? %d\n",
+           sv_ends_with(text, sv_from_cstr("three")));
 
     return 0;
 }

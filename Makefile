@@ -1,5 +1,5 @@
 TARGET = example
-SRCS   = sb.h example.c
+SRCS   = sbv.h example.c
 CFLAGS = -Wall -Wextra --std=c99
 
 $(TARGET): $(SRCS)
