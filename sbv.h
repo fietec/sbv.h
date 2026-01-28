@@ -72,6 +72,7 @@ SBVDEF char* sb_to_cstr(const sb_t *sb);
 SBVDEF char* sb_detach(sb_t *sb);
 
 SBVDEF bool sb_reserve(sb_t *sb, size_t bytes);
+SBVDEF void sb_clear(sb_t *sb);
 SBVDEF void sb_free(sb_t *sb);
 
 SBVDEF sv_t sv_null();
@@ -193,7 +194,7 @@ SBVDEF int sb_append_null(sb_t *sb)
     if (!sb_reserve(sb, 0)) return -1;
     
     sb->items[sb->count] = '\0';
-    return 1;
+    return 0;
 }
 
 SBVDEF int sb_extract(const sb_t *sb, char *buff, size_t buff_size)
@@ -229,7 +230,7 @@ SBVDEF char* sb_detach(sb_t *sb)
 {
     if (sb == NULL) return NULL;
     
-    if (sb_append_null(sb) == -1){
+    if (sb_append_null(sb) == -1 && sb->items != NULL){
         sb->items[sb->count] = '\0';
     }
     char *content = sb->items;
@@ -238,6 +239,12 @@ SBVDEF char* sb_detach(sb_t *sb)
     sb->count = sb->capacity = 0;
         
     return content;
+}
+
+SBVDEF void sb_clear(sb_t *sb)
+{
+    if (sb == NULL) return;
+    sb->count = 0;
 }
 
 SBVDEF void sb_free(sb_t *sb)
@@ -342,10 +349,10 @@ SBVDEF sv_t sv_split(sv_t sv, sv_t del, sv_t *rest)
 {
     size_t index = sv_find(sv, del);
     if (index == SIZE_MAX || sv_empty(del)){
-        *rest = sv_null();
+        if (rest) *rest = sv_null();
         return sv;
     }
-    *rest = sv_from_slice(sv.items + index + del.len, sv.len - index - del.len);
+    if (rest) *rest = sv_from_slice(sv.items + index + del.len, sv.len - index - del.len);
     return sv_from_slice(sv.items, index);
 }
 
