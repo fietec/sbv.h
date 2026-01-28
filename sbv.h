@@ -44,6 +44,17 @@
 #define SBV_WHITESPACE " \t\n\r\f\v"
 #define SV_TRIM_ALL 0
 
+#define SV_FOREACH_SPLIT(it, sv, del) \
+    for (sv_t _rest = (sv), it = sv_split(_rest, del, &_rest); \
+         it.items != NULL; \
+         it = sv_split(_rest, del, &_rest))
+
+#define SV_FOREACH_SPLIT_CHAR(it, sv, del) \
+    for (sv_t _rest = (sv), it = sv_split_char(_rest, del, &_rest); \
+         it.items != NULL; \
+         it = sv_split_char(_rest, del, &_rest))
+
+
 #if defined(__GNUC__) || defined(__clang__)
 #    ifdef __MINGW_PRINTF_FORMAT
 #        define SBV_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (__MINGW_PRINTF_FORMAT, STRING_INDEX, FIRST_TO_CHECK)))
@@ -55,14 +66,14 @@
 #endif
 
 typedef struct {
-    char *items;      // pointer to the buffer, (owned)
-    size_t count;     // number of bytes used
-    size_t capacity;  // total allocated capacity
+    char *items;       // pointer to the buffer, (owned)
+    size_t count;      // number of bytes used
+    size_t capacity;   // total allocated capacity
 } sb_t;
 
 typedef struct{
-    char *items;      // pointer to the buffer, (not owned)
-    size_t len;       // number of bytes
+    const char *items; // pointer to the buffer, (not owned)
+    size_t len;        // number of bytes
 } sv_t;
 
 SBVDEF sb_t sb_null();
@@ -89,19 +100,28 @@ SBVDEF sv_t sv_from_cstr(const char *cstr);
 SBVDEF sv_t sv_from_sb(const sb_t *sb);
 
 SBVDEF bool sv_empty(sv_t sv);
+SBVDEF bool sv_isnull(sv_t sv);
 SBVDEF bool sv_equals(sv_t a, sv_t b);
 SBVDEF bool sv_equals_case(sv_t a, sv_t b);
 SBVDEF bool sv_starts_with(sv_t sv, sv_t prefix);
 SBVDEF bool sv_ends_with(sv_t sv, sv_t suffix);
+
 SBVDEF size_t sv_find(sv_t sv, sv_t query);
 SBVDEF size_t sv_find_char(sv_t sv, char query);
-SBVDEF size_t sv_cstr_size(sv_t sv);
+SBVDEF size_t sv_count(sv_t sv, sv_t query);
+SBVDEF size_t sv_count_char(sv_t sv, char query);
+SBVDEF bool sv_contains(sv_t sv, sv_t query);
+SBVDEF bool sv_contains_char(sv_t sv, char query);
 
 SBVDEF sv_t sv_slice(sv_t sv, size_t from, size_t to);
 SBVDEF sv_t sv_chop_left(sv_t sv, size_t n);
 SBVDEF sv_t sv_chop_right(sv_t sv, size_t n);
+
+// use these with the SV_FOREACH_SPLIT macros or call until for the returned value sv_isnull is true
 SBVDEF sv_t sv_split(sv_t sv, sv_t del, sv_t *rest);
 SBVDEF sv_t sv_split_char(sv_t sv, char del, sv_t *rest);
+SBVDEF size_t sv_split_count(sv_t sv, sv_t del);
+SBVDEF size_t sv_split_char_count(sv_t sv, char del);
 
 SBVDEF sv_t sv_trim(sv_t sv);
 SBVDEF sv_t sv_trim_chars(sv_t sv, const char *chars);
@@ -116,6 +136,7 @@ SBVDEF sv_t sv_trim_right_chars(sv_t sv, const char *chars);
 SBVDEF sv_t sv_trim_right_seq(sv_t sv, sv_t seq, size_t iterations);
 
 SBVDEF int sv_extract(sv_t sv, char *buff, size_t buff_size);
+SBVDEF size_t sv_cstr_size(sv_t sv);
 SBVDEF char* sv_to_cstr(sv_t sv);
 
 #endif // SBV_H
@@ -279,7 +300,7 @@ SBVDEF void sb_free(sb_t *sb)
 SBVDEF sv_t sv_from_slice(const char *buff, size_t n)
 {
     return (sv_t){
-        .items = (char*) buff,
+        .items = buff,
         .len = n
     };
 }
@@ -299,6 +320,11 @@ SBVDEF sv_t sv_from_sb(const sb_t *sb)
     return sv_from_slice(sb->items, sb->count);
 }
 
+SBVDEF bool sv_isnull(sv_t sv)
+{
+    return sv.items == NULL;
+}
+
 SBVDEF bool sv_empty(sv_t sv)
 {
     return sv.len == 0;
@@ -306,7 +332,9 @@ SBVDEF bool sv_empty(sv_t sv)
 
 SBVDEF bool sv_equals(sv_t a, sv_t b)
 {
-    return (a.len == b.len) && (memcmp(a.items, b.items, a.len) == 0);
+    if (a.len != b.len) return false;
+    if (a.len == 0) return true;
+    return memcmp(a.items, b.items, a.len) == 0;
 }
 
 SBVDEF bool sv_equals_case(sv_t a, sv_t b)
@@ -322,12 +350,16 @@ SBVDEF bool sv_equals_case(sv_t a, sv_t b)
 
 SBVDEF bool sv_starts_with(sv_t sv, sv_t prefix)
 {
-    return (sv.len >= prefix.len) && (memcmp(sv.items, prefix.items, prefix.len) == 0);
+    if (prefix.len == 0) return true;
+    if (sv.len < prefix.len) return false;
+    return memcmp(sv.items, prefix.items, prefix.len) == 0;
 }
 
 SBVDEF bool sv_ends_with(sv_t sv, sv_t suffix)
 {
-    return (sv.len >= suffix.len) && (memcmp(sv.items+sv.len-suffix.len, suffix.items, suffix.len) == 0);
+    if (suffix.len == 0) return true;
+    if (sv.len < suffix.len) return false;
+    return memcmp(sv.items, suffix.items + sv.len - suffix.len, suffix.len) == 0;
 }
 
 SBVDEF size_t sv_find(sv_t sv, sv_t query)
@@ -354,9 +386,43 @@ SBVDEF size_t sv_find_char(sv_t sv, char query)
     return SIZE_MAX;
 }
 
+SBVDEF bool sv_contains(sv_t sv, sv_t query)
+{
+    return sv_find(sv, query) != SIZE_MAX;
+}
+
+SBVDEF bool sv_contains_char(sv_t sv, char query)
+{
+    return sv_find_char(sv, query) != SIZE_MAX;
+}
+
 SBVDEF size_t sv_cstr_size(sv_t sv)
 {
     return sv.len + 1;
+}
+
+SBVDEF size_t sv_count(sv_t sv, sv_t query)
+{
+    if (query.len == 0 || sv.len < query.len) return 0;
+    size_t count = 0;
+    for (size_t i=0; i <= sv.len - query.len;){
+        if (memcmp(sv.items + i, query.items, query.len) == 0){
+            count += 1;
+            i += query.len;
+        } else{
+            i += 1;
+        }
+    }
+    return count;
+}
+
+SBVDEF size_t sv_count_char(sv_t sv, char query)
+{
+    size_t count = 0;
+    for (size_t i=0; i<sv.len; ++i){
+        if (sv.items[i] == query) count += 1;
+    }
+    return count;
 }
 
 SBVDEF sv_t sv_slice(sv_t sv, size_t from, size_t to)
@@ -384,19 +450,64 @@ SBVDEF sv_t sv_chop_right(sv_t sv, size_t n)
 
 SBVDEF sv_t sv_split(sv_t sv, sv_t del, sv_t *rest)
 {
-    size_t index = sv_find(sv, del);
-    if (index == SIZE_MAX || sv_empty(del)){
+    if (sv.items == NULL) {
+        if (rest) *rest = sv_null();
+        return sv_null();
+    }
+
+    if (del.len == 0 || del.items == NULL) {
         if (rest) *rest = sv_null();
         return sv;
     }
-    if (rest) *rest = sv_from_slice(sv.items + index + del.len, sv.len - index - del.len);
-    return sv_from_slice(sv.items, index);
+
+    for (size_t i = 0; i + del.len <= sv.len; ++i) {
+        if (memcmp(sv.items + i, del.items, del.len) == 0) {
+            if (rest) *rest = sv_from_slice(sv.items + i + del.len, sv.len - i - del.len);
+            return sv_from_slice(sv.items, i);
+        }
+    }
+
+    if (rest) *rest = sv_null();
+    return sv;
 }
 
 SBVDEF sv_t sv_split_char(sv_t sv, char del, sv_t *rest)
 {
+    if (sv.items == NULL) {
+        if (rest) *rest = sv_null();
+        return sv_null();
+    }
+    for (size_t i = 0; i + 1 <= sv.len; ++i) {
+        if (sv.items[i] == del) {
+            if (rest) *rest = sv_from_slice(sv.items + i + 1, sv.len - i - 1);
+            return sv_from_slice(sv.items, i);
+        }
+    }
+
+    if (rest) *rest = sv_null();
+    return sv;
+}
+
+SBVDEF size_t sv_split_count(sv_t sv, sv_t del)
+{
+    if (sv.items == NULL) return 0;
+
+    if (sv.len == 0 || del.len == 0 || del.items == NULL) return 1;
+
+    size_t count = 1;
+    for (size_t i = 0; i + del.len <= sv.len; ++i) {
+        if (memcmp(sv.items + i, del.items, del.len) == 0) {
+            count++;
+            i += del.len - 1;
+        }
+    }
+    return count;
+}
+
+SBVDEF size_t sv_split_char_count(sv_t sv, char del)
+{
     sv_t del_sv = sv_from_slice(&del, 1);
-    return sv_split(sv, del_sv, rest);
+    return sv_split_count(sv, del_sv);
 }
 
 SBVDEF sv_t sv_trim(sv_t sv)
