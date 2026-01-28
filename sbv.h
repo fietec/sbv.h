@@ -84,10 +84,14 @@ SBVDEF bool sv_equals(sv_t a, sv_t b);
 SBVDEF bool sv_starts_with(sv_t sv, sv_t prefix);
 SBVDEF bool sv_ends_with(sv_t sv, sv_t suffix);
 SBVDEF size_t sv_find(sv_t sv, sv_t query);
+SBVDEF size_t sv_find_char(sv_t sv, char query);
 
 SBVDEF sv_t sv_slice(sv_t sv, size_t from, size_t to);
 SBVDEF sv_t sv_chop_left(sv_t sv, size_t n);
 SBVDEF sv_t sv_chop_right(sv_t sv, size_t n);
+SBVDEF sv_t sv_split(sv_t sv, sv_t del, sv_t *rest);
+SBVDEF sv_t sv_split_char(sv_t sv, char del, sv_t *rest);
+SBVDEF sv_t sv_trim(sv_t sv);
 
 SBVDEF int sv_extract(sv_t sv, char *buff, size_t buff_size);
 SBVDEF char* sv_to_cstr(sv_t sv);
@@ -188,7 +192,7 @@ SBVDEF int sb_append_null(sb_t *sb)
     if (sb == NULL) return -1;
     if (!sb_reserve(sb, 0)) return -1;
     
-    sb->items[sb->count++] = '\0';
+    sb->items[sb->count] = '\0';
     return 1;
 }
 
@@ -244,14 +248,6 @@ SBVDEF void sb_free(sb_t *sb)
     sb->count = sb->capacity = 0;
 }
 
-SBVDEF sv_t sv_null()
-{
-    return (sv_t){
-        .items = NULL,
-        .len = 0
-    };
-}
-
 SBVDEF sv_t sv_from_slice(const char *buff, size_t n)
 {
     return (sv_t){
@@ -260,20 +256,19 @@ SBVDEF sv_t sv_from_slice(const char *buff, size_t n)
     };
 }
 
+SBVDEF sv_t sv_null()
+{
+    return sv_from_slice(NULL, 0);
+}
+
 SBVDEF sv_t sv_from_cstr(const char *cstr)
 {
-    return (sv_t){
-        .items = (char*) cstr,
-        .len = strlen(cstr)
-    };
+    return sv_from_slice(cstr, strlen(cstr));
 }
 
 SBVDEF sv_t sv_from_sb(const sb_t *sb)
 {
-    return (sv_t){
-        .items = sb->items,
-        .len = sb->count
-    };
+    return sv_from_slice(sb->items, sb->count);
 }
 
 SBVDEF bool sv_empty(sv_t sv)
@@ -298,14 +293,24 @@ SBVDEF bool sv_ends_with(sv_t sv, sv_t suffix)
 
 SBVDEF size_t sv_find(sv_t sv, sv_t query)
 {
-    if (query.len == 0) return 0;
-    if (sv.items == NULL || query.items == NULL) return SIZE_MAX;
+    if (sv.items == NULL) return SIZE_MAX;
     if (query.len > sv.len) return SIZE_MAX;
+    if (sv_empty(query)) return 0;
 
     for (size_t i = 0; i + query.len <= sv.len; ++i) {
         if (memcmp(sv.items + i, query.items, query.len) == 0) {
             return i;
         }
+    }
+    return SIZE_MAX;
+}
+
+SBVDEF size_t sv_find_char(sv_t sv, char query)
+{
+    if (sv_empty(sv)) return SIZE_MAX;
+
+    for (size_t i = 0; i + 1 <= sv.len; ++i) {
+        if (sv.items[i] == query) return i;
     }
     return SIZE_MAX;
 }
@@ -324,19 +329,38 @@ SBVDEF sv_t sv_slice(sv_t sv, size_t from, size_t to)
 SBVDEF sv_t sv_chop_left(sv_t sv, size_t n)
 {
     if (n >= sv.len) n = sv.len;
-    return (sv_t){
-        .items = sv.items + n,
-        .len = sv.len - n
-    };
+    return sv_from_slice(sv.items + n, sv.len - n);
 }
 
 SBVDEF sv_t sv_chop_right(sv_t sv, size_t n)
 {
     if (n >= sv.len) n = sv.len;
-    return (sv_t){
-        .items = sv.items,
-        .len = sv.len - n
-    };
+    return sv_from_slice(sv.items, sv.len - n);
+}
+
+SBVDEF sv_t sv_split(sv_t sv, sv_t del, sv_t *rest)
+{
+    size_t index = sv_find(sv, del);
+    if (index == SIZE_MAX || sv_empty(del)){
+        *rest = sv_null();
+        return sv;
+    }
+    *rest = sv_from_slice(sv.items + index + del.len, sv.len - index - del.len);
+    return sv_from_slice(sv.items, index);
+}
+
+SBVDEF sv_t sv_split_char(sv_t sv, char del, sv_t *rest)
+{
+    sv_t del_sv = sv_from_slice(&del, 1);
+    return sv_split(sv, del_sv, rest);
+}
+
+SBVDEF sv_t sv_trim(sv_t sv)
+{
+    size_t start = 0, end = sv.len;
+    while (start < end && (sv.items[start] == ' ' || sv.items[start] == '\t' || sv.items[start] == '\n')) start++;
+    while (end > start && (sv.items[end-1] == ' ' || sv.items[end-1] == '\t' || sv.items[end-1] == '\n')) end--;
+    return sv_slice(sv, start, end);
 }
 
 SBVDEF int sv_extract(sv_t sv, char *buff, size_t buff_size)
