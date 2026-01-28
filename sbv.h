@@ -10,6 +10,8 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <string.h>
+#include <strings.h>
+#include <ctype.h>
 
 #ifndef SBVDEF
 #define SBVDEF static inline
@@ -34,7 +36,13 @@
 #define SB_INIT_CAPACITY 64
 #endif // SB_INIT_CAPACITY
 
+#ifdef _WIN32
+#define strncasecmp _strnicmp
+#endif // _WIN32
+
 #define SBV_MIN(a, b) ((a) < (b)? (a) : (b))
+#define SBV_WHITESPACE " \t\n\r\f\v"
+#define SV_TRIM_ALL 0
 
 #if defined(__GNUC__) || defined(__clang__)
 #    ifdef __MINGW_PRINTF_FORMAT
@@ -82,17 +90,30 @@ SBVDEF sv_t sv_from_sb(const sb_t *sb);
 
 SBVDEF bool sv_empty(sv_t sv);
 SBVDEF bool sv_equals(sv_t a, sv_t b);
+SBVDEF bool sv_equals_case(sv_t a, sv_t b);
 SBVDEF bool sv_starts_with(sv_t sv, sv_t prefix);
 SBVDEF bool sv_ends_with(sv_t sv, sv_t suffix);
 SBVDEF size_t sv_find(sv_t sv, sv_t query);
 SBVDEF size_t sv_find_char(sv_t sv, char query);
+SBVDEF size_t sv_cstr_size(sv_t sv);
 
 SBVDEF sv_t sv_slice(sv_t sv, size_t from, size_t to);
 SBVDEF sv_t sv_chop_left(sv_t sv, size_t n);
 SBVDEF sv_t sv_chop_right(sv_t sv, size_t n);
 SBVDEF sv_t sv_split(sv_t sv, sv_t del, sv_t *rest);
 SBVDEF sv_t sv_split_char(sv_t sv, char del, sv_t *rest);
+
 SBVDEF sv_t sv_trim(sv_t sv);
+SBVDEF sv_t sv_trim_chars(sv_t sv, const char *chars);
+SBVDEF sv_t sv_trim_seq(sv_t sv, sv_t seq, size_t iterations);
+
+SBVDEF sv_t sv_trim_left(sv_t sv);
+SBVDEF sv_t sv_trim_left_chars(sv_t sv, const char *chars);
+SBVDEF sv_t sv_trim_left_seq(sv_t sv, sv_t seq, size_t iterations);
+
+SBVDEF sv_t sv_trim_right(sv_t sv);
+SBVDEF sv_t sv_trim_right_chars(sv_t sv, const char *chars);
+SBVDEF sv_t sv_trim_right_seq(sv_t sv, sv_t seq, size_t iterations);
 
 SBVDEF int sv_extract(sv_t sv, char *buff, size_t buff_size);
 SBVDEF char* sv_to_cstr(sv_t sv);
@@ -288,6 +309,17 @@ SBVDEF bool sv_equals(sv_t a, sv_t b)
     return (a.len == b.len) && (memcmp(a.items, b.items, a.len) == 0);
 }
 
+SBVDEF bool sv_equals_case(sv_t a, sv_t b)
+{
+    if (a.len != b.len) return false;
+    for (size_t i=0; i<a.len; ++i){
+        if (tolower((unsigned char) a.items[i]) != tolower((unsigned char) b.items[i])){
+            return false;
+        }
+    }
+    return true;
+}
+
 SBVDEF bool sv_starts_with(sv_t sv, sv_t prefix)
 {
     return (sv.len >= prefix.len) && (memcmp(sv.items, prefix.items, prefix.len) == 0);
@@ -320,6 +352,11 @@ SBVDEF size_t sv_find_char(sv_t sv, char query)
         if (sv.items[i] == query) return i;
     }
     return SIZE_MAX;
+}
+
+SBVDEF size_t sv_cstr_size(sv_t sv)
+{
+    return sv.len + 1;
 }
 
 SBVDEF sv_t sv_slice(sv_t sv, size_t from, size_t to)
@@ -364,10 +401,85 @@ SBVDEF sv_t sv_split_char(sv_t sv, char del, sv_t *rest)
 
 SBVDEF sv_t sv_trim(sv_t sv)
 {
-    size_t start = 0, end = sv.len;
-    while (start < end && (sv.items[start] == ' ' || sv.items[start] == '\t' || sv.items[start] == '\n')) start++;
-    while (end > start && (sv.items[end-1] == ' ' || sv.items[end-1] == '\t' || sv.items[end-1] == '\n')) end--;
-    return sv_slice(sv, start, end);
+    return sv_trim_right(sv_trim_left(sv));
+}
+
+SBVDEF sv_t sv_trim_chars(sv_t sv, const char *chars)
+{
+    return sv_trim_right_chars(sv_trim_left_chars(sv, chars), chars);
+}
+
+SBVDEF sv_t sv_trim_seq(sv_t sv, sv_t seq, size_t iterations)
+{
+    return sv_trim_right_seq(sv_trim_left_seq(sv, seq, iterations), seq, iterations);
+}
+
+SBVDEF sv_t sv_trim_left(sv_t sv)
+{
+    return sv_trim_left_chars(sv, SBV_WHITESPACE);
+}
+
+SBVDEF sv_t sv_trim_right(sv_t sv)
+{
+    return sv_trim_right_chars(sv, SBV_WHITESPACE);
+}
+
+SBVDEF sv_t sv_trim_left_chars(sv_t sv, const char *chars)
+{
+    if (chars == NULL) return sv;
+    size_t start = 0;
+    size_t chars_count = strlen(chars);
+    while (start < sv.len){
+        bool trimmed = false;
+        for (size_t i=0; i<chars_count; ++i){
+            if (sv.items[start] == chars[i]){
+                trimmed = true;
+                break;
+            }
+        }
+        if (!trimmed) break;
+        start += 1;
+    }
+    return sv_slice(sv, start, sv.len);
+}
+
+SBVDEF sv_t sv_trim_right_chars(sv_t sv, const char *chars)
+{
+    if (chars == NULL) return sv;
+    size_t end = sv.len;
+    size_t chars_count = strlen(chars);
+    while (end > 0){
+        bool trimmed = false;
+        for (size_t i=0; i<chars_count; ++i){
+            if (sv.items[end-1] == chars[i]){
+                trimmed = true;
+                break;
+            }
+        }
+        if (!trimmed) break;
+        end -= 1;
+    }
+    return sv_slice(sv, 0, end);
+}
+
+SBVDEF sv_t sv_trim_left_seq(sv_t sv, sv_t seq, size_t iterations)
+{
+    bool keep_trimming = iterations == 0;
+    while (sv_starts_with(sv, seq) && (keep_trimming || iterations > 0)){
+        sv = sv_slice(sv, seq.len, sv.len);
+        if (!keep_trimming) iterations -= 1;
+    }
+    return sv;
+}
+
+SBVDEF sv_t sv_trim_right_seq(sv_t sv, sv_t seq, size_t iterations)
+{
+    bool keep_trimming = iterations == 0;
+    while (sv_ends_with(sv, seq) && (keep_trimming || iterations > 0)){
+        sv = sv_slice(sv, 0, sv.len - seq.len);
+        if (!keep_trimming) iterations -= 1;
+    }
+    return sv;
 }
 
 SBVDEF int sv_extract(sv_t sv, char *buff, size_t buff_size)
