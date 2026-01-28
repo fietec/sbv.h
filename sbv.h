@@ -117,7 +117,8 @@ SBVDEF sv_t sv_slice(sv_t sv, size_t from, size_t to);
 SBVDEF sv_t sv_chop_left(sv_t sv, size_t n);
 SBVDEF sv_t sv_chop_right(sv_t sv, size_t n);
 
-// use these with the SV_FOREACH_SPLIT macros or call until for the returned value sv_isnull is true
+// you can call these in a loop until the returned sv is sv_null
+// or use the SV_FOREACH_SPLIT, SV_FOREACH_SPLIT_CHAR macros
 SBVDEF sv_t sv_split(sv_t sv, sv_t del, sv_t *rest);
 SBVDEF sv_t sv_split_char(sv_t sv, char del, sv_t *rest);
 SBVDEF size_t sv_split_count(sv_t sv, sv_t del);
@@ -359,7 +360,7 @@ SBVDEF bool sv_ends_with(sv_t sv, sv_t suffix)
 {
     if (suffix.len == 0) return true;
     if (sv.len < suffix.len) return false;
-    return memcmp(sv.items, suffix.items + sv.len - suffix.len, suffix.len) == 0;
+    return memcmp(sv.items + sv.len - suffix.len, suffix.items, suffix.len) == 0;
 }
 
 SBVDEF size_t sv_find(sv_t sv, sv_t query)
