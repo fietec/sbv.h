@@ -76,9 +76,9 @@ typedef struct{
     size_t len;        // number of bytes
 } sv_t;
 
-#ifdef _cplusplus
+#ifdef __cplusplus
 extern "C" {
-#endif // _cplusplus
+#endif // __cplusplus
 
 SBVDEF sb_t sb_null();
 
@@ -152,9 +152,9 @@ SBVDEF char* sv_to_cstr(sv_t sv);
 
 SBVDEF int sbv_memicmp(const void *a, const void *b, size_t n);
 
-#ifdef _cplusplus
+#ifdef __cplusplus
 }
-#endif // _cplusplus
+#endif // __cplusplus
 
 #endif // SBV_H
 
