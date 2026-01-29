@@ -199,11 +199,16 @@ SBVDEF sb_t sb_null()
 SBVDEF bool sb_reserve(sb_t *sb, size_t bytes)
 {
     if (sb == NULL) return false;
+    if (bytes > SIZE_MAX - sb->count - 1) return false;
     size_t required = sb->count + bytes + 1;
     size_t capacity = sb->capacity ? sb->capacity : SB_INIT_CAPACITY;
     while (capacity < required){
-        if (capacity > SIZE_MAX / 2) return false;
-        capacity *= 2;
+        if (capacity == SIZE_MAX) return false;
+        if (capacity > SIZE_MAX / 2){
+            capacity = SIZE_MAX;
+        } else{
+            capacity *= 2;
+        }
     }
     if (capacity != sb->capacity){
         char *new_items = SBV_REALLOC(sb->items, sizeof(*sb->items) * capacity);
@@ -267,6 +272,7 @@ SBVDEF int sb_append_slice(sb_t *sb, const char *buff, size_t n)
 
 SBVDEF int sb_append_cstr(sb_t *sb, const char *cstr)
 {
+    if (cstr == NULL) return -1;
     return sb_append_slice(sb, cstr, strlen(cstr));
 }
 
