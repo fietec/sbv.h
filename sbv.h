@@ -80,6 +80,7 @@ SBVDEF sb_t sb_null();
 
 SBVDEF int sb_appendf(sb_t *sb, const char *fmt, ...) SBV_PRINTF_FORMAT(2, 3);
 SBVDEF int sb_vappendf(sb_t *sb, const char *fmt, va_list args);
+SBVDEF int sb_append_cstr(sb_t *sb, const char *cstr);
 SBVDEF int sb_append_slice(sb_t *sb, const char *buff, size_t n);
 SBVDEF int sb_append_sv(sb_t *sb, sv_t sv);
 SBVDEF int sb_append_char(sb_t *sb, char c);
@@ -220,6 +221,11 @@ SBVDEF int sb_append_slice(sb_t *sb, const char *buff, size_t n)
     
     sb->count += n;
     return n;
+}
+
+SBVDEF int sb_append_cstr(sb_t *sb, const char *cstr)
+{
+    return sb_append_slice(sb, cstr, strlen(cstr));
 }
 
 SBVDEF int sb_append_char(sb_t *sb, char c)
@@ -549,14 +555,7 @@ SBVDEF sv_t sv_trim_left_chars(sv_t sv, const char *chars)
     size_t start = 0;
     size_t chars_count = strlen(chars);
     while (start < sv.len){
-        bool trimmed = false;
-        for (size_t i=0; i<chars_count; ++i){
-            if (sv.items[start] == chars[i]){
-                trimmed = true;
-                break;
-            }
-        }
-        if (!trimmed) break;
+        if (memchr(chars, sv.items[start], chars_count) == NULL) break;
         start += 1;
     }
     return sv_slice(sv, start, sv.len);
@@ -568,14 +567,7 @@ SBVDEF sv_t sv_trim_right_chars(sv_t sv, const char *chars)
     size_t end = sv.len;
     size_t chars_count = strlen(chars);
     while (end > 0){
-        bool trimmed = false;
-        for (size_t i=0; i<chars_count; ++i){
-            if (sv.items[end-1] == chars[i]){
-                trimmed = true;
-                break;
-            }
-        }
-        if (!trimmed) break;
+        if (memchr(chars, sv.items[end-1], chars_count) == NULL) break;
         end -= 1;
     }
     return sv_slice(sv, 0, end);
@@ -583,6 +575,8 @@ SBVDEF sv_t sv_trim_right_chars(sv_t sv, const char *chars)
 
 SBVDEF sv_t sv_trim_left_seq(sv_t sv, sv_t seq, size_t iterations)
 {
+    if (sv.len == 0 || seq.len == 0) return sv;
+
     bool keep_trimming = iterations == 0;
     while (sv_starts_with(sv, seq) && (keep_trimming || iterations > 0)){
         sv = sv_slice(sv, seq.len, sv.len);
@@ -593,6 +587,8 @@ SBVDEF sv_t sv_trim_left_seq(sv_t sv, sv_t seq, size_t iterations)
 
 SBVDEF sv_t sv_trim_right_seq(sv_t sv, sv_t seq, size_t iterations)
 {
+    if (sv.len == 0 || seq.len == 0) return sv;
+
     bool keep_trimming = iterations == 0;
     while (sv_ends_with(sv, seq) && (keep_trimming || iterations > 0)){
         sv = sv_slice(sv, 0, sv.len - seq.len);
