@@ -126,15 +126,15 @@ SBVDEF size_t sv_split_char_count(sv_t sv, char del);
 
 SBVDEF sv_t sv_trim(sv_t sv);
 SBVDEF sv_t sv_trim_chars(sv_t sv, const char *chars);
-SBVDEF sv_t sv_trim_seq(sv_t sv, sv_t seq, size_t iterations);
+SBVDEF sv_t sv_trim_seq(sv_t sv, sv_t seq, size_t iterations);       // use SV_SPLIT_ALL to trim as often as possible
 
 SBVDEF sv_t sv_trim_left(sv_t sv);
 SBVDEF sv_t sv_trim_left_chars(sv_t sv, const char *chars);
-SBVDEF sv_t sv_trim_left_seq(sv_t sv, sv_t seq, size_t iterations);
+SBVDEF sv_t sv_trim_left_seq(sv_t sv, sv_t seq, size_t iterations);  // use SV_SPLIT_ALL to trim as often as possible
 
 SBVDEF sv_t sv_trim_right(sv_t sv);
 SBVDEF sv_t sv_trim_right_chars(sv_t sv, const char *chars);
-SBVDEF sv_t sv_trim_right_seq(sv_t sv, sv_t seq, size_t iterations);
+SBVDEF sv_t sv_trim_right_seq(sv_t sv, sv_t seq, size_t iterations); // use SV_SPLIT_ALL to trim as often as possible
 
 SBVDEF int sv_extract(sv_t sv, char *buff, size_t buff_size);
 SBVDEF size_t sv_cstr_size(sv_t sv);
@@ -507,8 +507,15 @@ SBVDEF size_t sv_split_count(sv_t sv, sv_t del)
 
 SBVDEF size_t sv_split_char_count(sv_t sv, char del)
 {
-    sv_t del_sv = sv_from_slice(&del, 1);
-    return sv_split_count(sv, del_sv);
+    if (sv.items == NULL) return 0;
+    if (sv.len == 0) return 1;
+    size_t count = 1;
+    for (size_t i = 0; i + 1 <= sv.len; ++i) {
+        if (sv.items[i] == del) {
+            count++;
+        }
+    }
+    return count;
 }
 
 SBVDEF sv_t sv_trim(sv_t sv)
