@@ -43,6 +43,8 @@
 #define SBV_MIN(a, b) ((a) < (b)? (a) : (b))
 #define SBV_WHITESPACE " \t\n\r\f\v"
 #define SV_TRIM_ALL 0
+#define SV_PRINT_FORMAT "%.*s"
+#define SV_PRINT_ARGS(sv) (int)(sv).len, (sv).items
 
 #define SV_FOREACH_SPLIT(it, sv, del) \
     for (sv_t _rest = (sv), it = sv_split(_rest, del, &_rest); \
@@ -135,7 +137,7 @@ SBVDEF sv_t sv_chop_left(sv_t sv, size_t n);
 SBVDEF sv_t sv_chop_right(sv_t sv, size_t n);
 
 // you can call these in a loop until the returned sv is sv_null
-// or use the SV_FOREACH_SPLIT, SV_FOREACH_SPLIT_CHAR macros
+// or use the SV_FOREACH_SPLIT, SV_FOREACH_SPLIT_CASE and SV_FOREACH_SPLIT_CHAR macros
 SBVDEF sv_t sv_split(sv_t sv, sv_t del, sv_t *rest);
 SBVDEF sv_t sv_split_case(sv_t sv, sv_t del, sv_t *rest);
 SBVDEF sv_t sv_split_char(sv_t sv, char del, sv_t *rest);
@@ -597,7 +599,7 @@ SBVDEF sv_t sv_split_char(sv_t sv, char del, sv_t *rest)
         if (rest) *rest = sv_null();
         return sv_null();
     }
-    for (size_t i = 0; i + 1 <= sv.len; ++i) {
+    for (size_t i=0; i < sv.len; ++i) {
         if (sv.items[i] == del) {
             if (rest) *rest = sv_from_slice(sv.items + i + 1, sv.len - i - 1);
             return sv_from_slice(sv.items, i);
