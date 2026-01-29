@@ -76,6 +76,10 @@ typedef struct{
     size_t len;        // number of bytes
 } sv_t;
 
+#ifdef _cplusplus
+extern "C" {
+#endif // _cplusplus
+
 SBVDEF sb_t sb_null();
 
 SBVDEF int sb_appendf(sb_t *sb, const char *fmt, ...) SBV_PRINTF_FORMAT(2, 3);
@@ -140,6 +144,10 @@ SBVDEF sv_t sv_trim_right_seq(sv_t sv, sv_t seq, size_t iterations); // use SV_S
 SBVDEF int sv_extract(sv_t sv, char *buff, size_t buff_size);
 SBVDEF size_t sv_cstr_size(sv_t sv);
 SBVDEF char* sv_to_cstr(sv_t sv);
+
+#ifdef _cplusplus
+}
+#endif // _cplusplus
 
 #endif // SBV_H
 
