@@ -109,13 +109,18 @@ SBVDEF bool sv_isnull(sv_t sv);
 SBVDEF bool sv_equals(sv_t a, sv_t b);
 SBVDEF bool sv_equals_case(sv_t a, sv_t b);
 SBVDEF bool sv_starts_with(sv_t sv, sv_t prefix);
+SBVDEF bool sv_starts_with_case(sv_t sv, sv_t prefix);
 SBVDEF bool sv_ends_with(sv_t sv, sv_t suffix);
+SBVDEF bool sv_ends_with_case(sv_t sv, sv_t suffix);
 
 SBVDEF size_t sv_find(sv_t sv, sv_t query);
+SBVDEF size_t sv_find_case(sv_t sv, sv_t query);
 SBVDEF size_t sv_find_char(sv_t sv, char query);
+
 SBVDEF size_t sv_count(sv_t sv, sv_t query);
 SBVDEF size_t sv_count_char(sv_t sv, char query);
 SBVDEF bool sv_contains(sv_t sv, sv_t query);
+SBVDEF bool sv_contains_case(sv_t sv, sv_t query);
 SBVDEF bool sv_contains_char(sv_t sv, char query);
 
 SBVDEF sv_t sv_slice(sv_t sv, size_t from, size_t to);
@@ -131,19 +136,21 @@ SBVDEF size_t sv_split_char_count(sv_t sv, char del);
 
 SBVDEF sv_t sv_trim(sv_t sv);
 SBVDEF sv_t sv_trim_chars(sv_t sv, const char *chars);
-SBVDEF sv_t sv_trim_seq(sv_t sv, sv_t seq, size_t iterations);       // use SV_SPLIT_ALL to trim as often as possible
+SBVDEF sv_t sv_trim_seq(sv_t sv, sv_t seq, size_t iterations);       // use SV_TRIM_ALL to trim as often as possible
 
 SBVDEF sv_t sv_trim_left(sv_t sv);
 SBVDEF sv_t sv_trim_left_chars(sv_t sv, const char *chars);
-SBVDEF sv_t sv_trim_left_seq(sv_t sv, sv_t seq, size_t iterations);  // use SV_SPLIT_ALL to trim as often as possible
+SBVDEF sv_t sv_trim_left_seq(sv_t sv, sv_t seq, size_t iterations);  // use SV_TRIM_ALL to trim as often as possible
 
 SBVDEF sv_t sv_trim_right(sv_t sv);
 SBVDEF sv_t sv_trim_right_chars(sv_t sv, const char *chars);
-SBVDEF sv_t sv_trim_right_seq(sv_t sv, sv_t seq, size_t iterations); // use SV_SPLIT_ALL to trim as often as possible
+SBVDEF sv_t sv_trim_right_seq(sv_t sv, sv_t seq, size_t iterations); // use SV_TRIM_ALL to trim as often as possible
 
 SBVDEF int sv_extract(sv_t sv, char *buff, size_t buff_size);
 SBVDEF size_t sv_cstr_size(sv_t sv);
 SBVDEF char* sv_to_cstr(sv_t sv);
+
+SBVDEF int sbv_memicmp(const void *a, const void *b, size_t n);
 
 #ifdef _cplusplus
 }
@@ -152,6 +159,24 @@ SBVDEF char* sv_to_cstr(sv_t sv);
 #endif // SBV_H
 
 #ifdef SBV_IMPLEMENTATION
+
+SBVDEF int sbv_memicmp(const void *a, const void *b, size_t n)
+{
+    const unsigned char *pa = (const unsigned char *)a;
+    const unsigned char *pb = (const unsigned char *)b;
+
+    for (size_t i = 0; i < n; ++i) {
+        unsigned char ca = pa[i];
+        unsigned char cb = pb[i];
+
+        if (ca >= 'A' && ca <= 'Z') ca += 'a' - 'A';
+        if (cb >= 'A' && cb <= 'Z') cb += 'a' - 'A';
+
+        if (ca != cb)
+            return (int)ca - (int)cb;
+    }
+    return 0;
+}
 
 SBVDEF sb_t sb_null()
 {
@@ -355,12 +380,8 @@ SBVDEF bool sv_equals(sv_t a, sv_t b)
 SBVDEF bool sv_equals_case(sv_t a, sv_t b)
 {
     if (a.len != b.len) return false;
-    for (size_t i=0; i<a.len; ++i){
-        if (tolower((unsigned char) a.items[i]) != tolower((unsigned char) b.items[i])){
-            return false;
-        }
-    }
-    return true;
+    if (a.len == 0) return true;
+    return sbv_memicmp(a.items, b.items, a.len) == 0;
 }
 
 SBVDEF bool sv_starts_with(sv_t sv, sv_t prefix)
@@ -370,11 +391,25 @@ SBVDEF bool sv_starts_with(sv_t sv, sv_t prefix)
     return memcmp(sv.items, prefix.items, prefix.len) == 0;
 }
 
+SBVDEF bool sv_starts_with_case(sv_t sv, sv_t prefix)
+{
+    if (prefix.len == 0) return true;
+    if (sv.len < prefix.len) return false;
+    return sbv_memicmp(sv.items, prefix.items, prefix.len) == 0;
+}
+
 SBVDEF bool sv_ends_with(sv_t sv, sv_t suffix)
 {
     if (suffix.len == 0) return true;
     if (sv.len < suffix.len) return false;
     return memcmp(sv.items + sv.len - suffix.len, suffix.items, suffix.len) == 0;
+}
+
+SBVDEF bool sv_ends_with_case(sv_t sv, sv_t suffix)
+{
+    if (suffix.len == 0) return true;
+    if (sv.len < suffix.len) return false;
+    return sbv_memicmp(sv.items + sv.len - suffix.len, suffix.items, suffix.len) == 0;
 }
 
 SBVDEF size_t sv_find(sv_t sv, sv_t query)
@@ -387,6 +422,17 @@ SBVDEF size_t sv_find(sv_t sv, sv_t query)
         if (memcmp(sv.items + i, query.items, query.len) == 0) {
             return i;
         }
+    }
+    return SIZE_MAX;
+}
+
+SBVDEF size_t sv_find_case(sv_t sv, sv_t query)
+{
+    if (sv.items == NULL || query.len > sv.len) return SIZE_MAX;
+    if (sv_empty(query)) return 0;
+
+    for (size_t i=0; i+query.len <= sv.len; ++i){
+        if (sbv_memicmp(sv.items + i, query.items, query.len) == 0) return i;
     }
     return SIZE_MAX;
 }
@@ -404,6 +450,11 @@ SBVDEF size_t sv_find_char(sv_t sv, char query)
 SBVDEF bool sv_contains(sv_t sv, sv_t query)
 {
     return sv_find(sv, query) != SIZE_MAX;
+}
+
+SBVDEF bool sv_contains_case(sv_t sv, sv_t query)
+{
+    return sv_find_case(sv, query) != SIZE_MAX;
 }
 
 SBVDEF bool sv_contains_char(sv_t sv, char query)
