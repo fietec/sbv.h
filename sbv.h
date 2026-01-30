@@ -95,6 +95,9 @@ SBVDEF int sb_append_slice(sb_t *sb, const char *buff, size_t n);
 SBVDEF int sb_append_sv(sb_t *sb, sv_t sv);
 SBVDEF int sb_append_char(sb_t *sb, char c);
 SBVDEF int sb_append_null(sb_t *sb);
+SBVDEF int sb_append_file(sb_t *sb, const char *filename);
+
+SBVDEF int sb_pop(sb_t *sb, size_t n);
 
 SBVDEF int sb_extract(const sb_t *sb, char *buff, size_t buff_size);
 SBVDEF int sb_extract_slice(const sb_t *sb, size_t n, char *buff, size_t buff_size);
@@ -312,6 +315,44 @@ SBVDEF int sb_append_null(sb_t *sb)
     return 0;
 }
 
+SBVDEF int sb_append_file(sb_t *sb, const char *filename)
+{
+    if (sb == NULL || filename == NULL) return -1;
+
+    FILE *file = fopen(filename, "rb");
+    if (file == NULL) return -1;
+
+    char buffer[4096];
+    size_t n;
+    size_t bytes_written = 0;
+
+    while ((n = fread(buffer, 1, sizeof(buffer), file)) > 0){
+        int bytes = sb_append_slice(sb, buffer, n);
+        if (bytes == -1){
+            sb_pop(sb, bytes_written);
+            fclose(file);
+            return -1;
+        }
+        bytes_written += (size_t) bytes;
+    }
+    if (ferror(file)){
+        sb_pop(sb, bytes_written);
+        fclose(file);
+        return -1;
+    }
+    fclose(file);
+    return bytes_written;
+}
+
+SBVDEF int sb_pop(sb_t *sb, size_t n)
+{
+    if (sb == NULL) return -1;
+
+    size_t bytes = SBV_MIN(sb->count, n);
+    sb->count -= bytes;
+    return bytes;
+}
+
 SBVDEF int sb_extract(const sb_t *sb, char *buff, size_t buff_size)
 {
     return sb_extract_slice(sb, sb->count, buff, buff_size);
@@ -419,9 +460,9 @@ SBVDEF bool sv_equals_case(sv_t a, sv_t b)
 
 SBVDEF int sv_compare(sv_t a, sv_t b)
 {
-    if (sv_null(a) && sv_null(b)) return 0;
-    if (sv_null(a)) return -1;
-    if (sv_null(b)) return 1;
+    if (sv_isnull(a) && sv_isnull(b)) return 0;
+    if (sv_isnull(a)) return -1;
+    if (sv_isnull(b)) return 1;
 
     size_t n = SBV_MIN(a.len, b.len);
     int result = memcmp(a.items, b.items, n);
@@ -431,9 +472,9 @@ SBVDEF int sv_compare(sv_t a, sv_t b)
 
 SBVDEF int sv_compare_case(sv_t a, sv_t b)
 {
-    if (sv_null(a) && sv_null(b)) return 0;
-    if (sv_null(a)) return -1;
-    if (sv_null(b)) return 1;
+    if (sv_isnull(a) && sv_isnull(b)) return 0;
+    if (sv_isnull(a)) return -1;
+    if (sv_isnull(b)) return 1;
 
     size_t n = SBV_MIN(a.len, b.len);
     int result = sbv_memicmp(a.items, b.items, n);
