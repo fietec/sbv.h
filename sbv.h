@@ -61,7 +61,6 @@
          it.items != NULL; \
          it = sv_split_char(_rest, del, &_rest))
 
-
 #if defined(__GNUC__) || defined(__clang__)
 #    ifdef __MINGW_PRINTF_FORMAT
 #        define SBV_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (__MINGW_PRINTF_FORMAT, STRING_INDEX, FIRST_TO_CHECK)))
@@ -115,6 +114,8 @@ SBVDEF bool sv_empty(sv_t sv);
 SBVDEF bool sv_isnull(sv_t sv);
 SBVDEF bool sv_equals(sv_t a, sv_t b);
 SBVDEF bool sv_equals_case(sv_t a, sv_t b);
+SBVDEF int  sv_compare(sv_t a, sv_t b);
+SBVDEF int  sv_compare_case(sv_t a, sv_t b);
 SBVDEF bool sv_starts_with(sv_t sv, sv_t prefix);
 SBVDEF bool sv_starts_with_case(sv_t sv, sv_t prefix);
 SBVDEF bool sv_ends_with(sv_t sv, sv_t suffix);
@@ -162,6 +163,7 @@ SBVDEF size_t sv_cstr_size(sv_t sv);
 SBVDEF char* sv_to_cstr(sv_t sv);
 
 SBVDEF int sbv_memicmp(const void *a, const void *b, size_t n);
+SBVDEF char* sbv_strdup(const char *string);
 
 #ifdef __cplusplus
 }
@@ -183,10 +185,24 @@ SBVDEF int sbv_memicmp(const void *a, const void *b, size_t n)
         if (ca >= 'A' && ca <= 'Z') ca += 'a' - 'A';
         if (cb >= 'A' && cb <= 'Z') cb += 'a' - 'A';
 
-        if (ca != cb)
-            return (int)ca - (int)cb;
+        if (ca != cb) return (int)ca - (int)cb;
     }
     return 0;
+}
+
+SBVDEF char* sbv_strdup(const char *string)
+{
+    if (string == NULL) return NULL;
+
+    size_t string_len = strlen(string);
+
+    char *new_string = SBV_MALLOC(string_len + 1);
+    if (new_string == NULL) return NULL;
+
+    (void) memcpy(new_string, string, string_len);
+    new_string[string_len] = '\0';
+
+    return new_string;
 }
 
 SBVDEF sb_t sb_null()
@@ -399,6 +415,30 @@ SBVDEF bool sv_equals_case(sv_t a, sv_t b)
     if (a.len != b.len) return false;
     if (a.len == 0) return true;
     return sbv_memicmp(a.items, b.items, a.len) == 0;
+}
+
+SBVDEF int sv_compare(sv_t a, sv_t b)
+{
+    if (sv_null(a) && sv_null(b)) return 0;
+    if (sv_null(a)) return -1;
+    if (sv_null(b)) return 1;
+
+    size_t n = SBV_MIN(a.len, b.len);
+    int result = memcmp(a.items, b.items, n);
+    if (result != 0) return result;
+    return (a.len < b.len) ? -1 : (a.len > b.len);
+}
+
+SBVDEF int sv_compare_case(sv_t a, sv_t b)
+{
+    if (sv_null(a) && sv_null(b)) return 0;
+    if (sv_null(a)) return -1;
+    if (sv_null(b)) return 1;
+
+    size_t n = SBV_MIN(a.len, b.len);
+    int result = sbv_memicmp(a.items, b.items, n);
+    if (result != 0) return result;
+    return (a.len < b.len) ? -1 : (a.len > b.len);
 }
 
 SBVDEF bool sv_starts_with(sv_t sv, sv_t prefix)
