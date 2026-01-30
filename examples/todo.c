@@ -33,7 +33,7 @@ int main(int argc, const char *argv[])
 
         size_t column = body.items - line.items + 1;
         
-        printf("%s:%zu:%zu: '"SV_PRINT_FORMAT"'\n", filename, line_number, column, SV_PRINT_ARGS(body));
+        printf("%s:%zu:%zu: '"SV_PRINT_FORMAT"'\n", filename, line_number, column, SV_PRINT_ARGS(sv_trim(line)));
     }
     
     sb_free(&sb);
