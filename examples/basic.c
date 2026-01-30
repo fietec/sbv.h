@@ -1,7 +1,7 @@
 #include <stdio.h>
 
 #define SBV_IMPLEMENTATION
-#include "sbv.h"
+#include "../sbv.h"
 
 int main(void) {
     // --- Build a dynamic string ---
