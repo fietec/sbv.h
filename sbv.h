@@ -46,6 +46,8 @@
 #define SV_PRINT_FORMAT "%.*s"
 #define SV_PRINT_ARGS(sv) (int)(sv).len, (sv).items
 
+// convenience macros to iterate over substrings of a string view split by a delimiter
+// these macros repeatedly call sv_split*, yielding each left-hand substring in `it`
 #define SV_FOREACH_SPLIT(it, sv, del) \
     for (sv_t _rest = (sv), it = sv_split(_rest, del, &_rest); \
          it.items != NULL; \
@@ -86,8 +88,13 @@ typedef struct{
 extern "C" {
 #endif // __cplusplus
 
+/* String Builder Functions */
+
+// create an empty string builder, same as `sb_t sb = {0}`
 SBVDEF sb_t sb_null();
 
+// append data to the string builder
+// return the number of bytes appended on success, or a negative value on error.
 SBVDEF int sb_appendf(sb_t *sb, const char *fmt, ...) SBV_PRINTF_FORMAT(2, 3);
 SBVDEF int sb_vappendf(sb_t *sb, const char *fmt, va_list args);
 SBVDEF int sb_append_cstr(sb_t *sb, const char *cstr);
@@ -97,24 +104,43 @@ SBVDEF int sb_append_char(sb_t *sb, char c);
 SBVDEF int sb_append_null(sb_t *sb);
 SBVDEF int sb_append_file(sb_t *sb, const char *filename);
 
+// pop the last n-bytes of the string builder
+// return the number of bytes popped on success, or a negative value on error
 SBVDEF int sb_pop(sb_t *sb, size_t n);
 
+// write a string builder's content as a null-terminated string into a buffer
+// return the bytes written (including the null-terminator) on success, or a negative value on error
 SBVDEF int sb_extract(const sb_t *sb, char *buff, size_t buff_size);
 SBVDEF int sb_extract_slice(const sb_t *sb, size_t n, char *buff, size_t buff_size);
+
+// allocate a null-terminated string storing a copy of the string builder's current content
+// return the allocated string
 SBVDEF char* sb_to_cstr(const sb_t *sb);
+
+// null terminate the string builder's content and hand off owning of the content
+// return the string builder's content
 SBVDEF char* sb_detach(sb_t *sb);
 
+// reserve space for additional bytes
+// return success
 SBVDEF bool sb_reserve(sb_t *sb, size_t bytes);
+
+// reset the string builder
 SBVDEF void sb_clear(sb_t *sb);
+// reset string builder and free allocated memory
 SBVDEF void sb_free(sb_t *sb);
 
+/* String View Functions */
+
+// create a string view
 SBVDEF sv_t sv_null();
 SBVDEF sv_t sv_from_slice(const char *buff, size_t n);
 SBVDEF sv_t sv_from_cstr(const char *cstr);
 SBVDEF sv_t sv_from_sb(const sb_t *sb);
 
+// comparison functions
 SBVDEF bool sv_empty(sv_t sv);
-SBVDEF bool sv_isnull(sv_t sv);
+SBVDEF bool sv_isnull(sv_t sv); // check whether the string view's items are null
 SBVDEF bool sv_equals(sv_t a, sv_t b);
 SBVDEF bool sv_equals_case(sv_t a, sv_t b);
 SBVDEF int  sv_compare(sv_t a, sv_t b);
@@ -124,22 +150,30 @@ SBVDEF bool sv_starts_with_case(sv_t sv, sv_t prefix);
 SBVDEF bool sv_ends_with(sv_t sv, sv_t suffix);
 SBVDEF bool sv_ends_with_case(sv_t sv, sv_t suffix);
 
+// find a query within a string view
+// return the index of the found query, or SIZE_MAX if not found
 SBVDEF size_t sv_find(sv_t sv, sv_t query);
 SBVDEF size_t sv_find_case(sv_t sv, sv_t query);
 SBVDEF size_t sv_find_char(sv_t sv, char query);
 
+// count the number of occurrences of a query within a string view
 SBVDEF size_t sv_count(sv_t sv, sv_t query);
 SBVDEF size_t sv_count_case(sv_t sv, sv_t query);
 SBVDEF size_t sv_count_char(sv_t sv, char query);
 
+// check for the occurrence of a query within a string view
 SBVDEF bool sv_contains(sv_t sv, sv_t query);
 SBVDEF bool sv_contains_case(sv_t sv, sv_t query);
 SBVDEF bool sv_contains_char(sv_t sv, char query);
 
+// return resized string view
 SBVDEF sv_t sv_slice(sv_t sv, size_t from, size_t to);
 SBVDEF sv_t sv_chop_left(sv_t sv, size_t n);
 SBVDEF sv_t sv_chop_right(sv_t sv, size_t n);
 
+// split a string view once by a delimiter
+// return the lhs of the delimiter (or the full string view if the delimiter was not found)
+// assign the rhs of the delimiter to an other string view
 // you can call these in a loop until the returned sv is sv_null
 // or use the SV_FOREACH_SPLIT, SV_FOREACH_SPLIT_CASE and SV_FOREACH_SPLIT_CHAR macros
 SBVDEF sv_t sv_split(sv_t sv, sv_t del, sv_t *rest);
@@ -149,23 +183,39 @@ SBVDEF size_t sv_split_count(sv_t sv, sv_t del);
 SBVDEF size_t sv_split_case_count(sv_t sv, sv_t del);
 SBVDEF size_t sv_split_char_count(sv_t sv, char del);
 
+// trim whitespaces from a string view
 SBVDEF sv_t sv_trim(sv_t sv);
+// trim a set of characters from a string view
 SBVDEF sv_t sv_trim_chars(sv_t sv, const char *chars);
+// trim sequences from a string view, iterations-times
 SBVDEF sv_t sv_trim_seq(sv_t sv, sv_t seq, size_t iterations);       // use SV_TRIM_ALL to trim as often as possible
 
+// only trim from the left
 SBVDEF sv_t sv_trim_left(sv_t sv);
 SBVDEF sv_t sv_trim_left_chars(sv_t sv, const char *chars);
 SBVDEF sv_t sv_trim_left_seq(sv_t sv, sv_t seq, size_t iterations);  // use SV_TRIM_ALL to trim as often as possible
 
+// only trim from the right
 SBVDEF sv_t sv_trim_right(sv_t sv);
 SBVDEF sv_t sv_trim_right_chars(sv_t sv, const char *chars);
 SBVDEF sv_t sv_trim_right_seq(sv_t sv, sv_t seq, size_t iterations); // use SV_TRIM_ALL to trim as often as possible
 
+// write a string view's content as a null-terminated string into a buffer
+// return the amount of bytes written (including the null-terminator), or a negative value on error
 SBVDEF int sv_extract(sv_t sv, char *buff, size_t buff_size);
+
+// return the size of a buffer that could hold a null-terminated copy of the string view's content
 SBVDEF size_t sv_cstr_size(sv_t sv);
+
+// allocate a null-terminated string storing a copy of the string view's current content
+// return the allocated string
 SBVDEF char* sv_to_cstr(sv_t sv);
 
+/* Helper Functions */
+
+// case-insensitive libc `memcmp`
 SBVDEF int sbv_memicmp(const void *a, const void *b, size_t n);
+// custom implementation of `strdup`
 SBVDEF char* sbv_strdup(const char *string);
 
 #ifdef __cplusplus
@@ -234,7 +284,7 @@ SBVDEF bool sb_reserve(sb_t *sb, size_t bytes)
     if (capacity != sb->capacity){
         char *new_items = SBV_REALLOC(sb->items, sizeof(*sb->items) * capacity);
         if (new_items == NULL) return false;
-        
+
         sb->items = new_items;
         sb->capacity = capacity;
     }
@@ -249,7 +299,7 @@ SBVDEF int sb_appendf(sb_t *sb, const char *fmt, ...)
     va_start(args, fmt);
 
     int n = sb_vappendf(sb, fmt, args);
-    
+
     va_end(args);
     return n;
 }
@@ -257,7 +307,7 @@ SBVDEF int sb_appendf(sb_t *sb, const char *fmt, ...)
 SBVDEF int sb_vappendf(sb_t *sb, const char *fmt, va_list args)
 {
     if (sb == NULL) return -1;
-    
+
     va_list args_copy;
     va_copy(args_copy, args);
 
@@ -266,7 +316,7 @@ SBVDEF int sb_vappendf(sb_t *sb, const char *fmt, va_list args)
     if (n < 0) return n;
 
     if (!sb_reserve(sb, n)) return -1;
-    
+
     int w = vsnprintf(&sb->items[sb->count], n+1, fmt, args);
     if (w != n) return -1;
 
@@ -286,7 +336,7 @@ SBVDEF int sb_append_slice(sb_t *sb, const char *buff, size_t n)
     if (!sb_reserve(sb, n)) return -1;
 
     (void) memcpy(&sb->items[sb->count], buff, n);
-    
+
     sb->count += n;
     return n;
 }
@@ -310,7 +360,7 @@ SBVDEF int sb_append_null(sb_t *sb)
 {
     if (sb == NULL) return -1;
     if (!sb_reserve(sb, 0)) return -1;
-    
+
     sb->items[sb->count] = '\0';
     return 0;
 }
@@ -366,7 +416,7 @@ SBVDEF int sb_extract_slice(const sb_t *sb, size_t n, char *buff, size_t buff_si
     size_t bytes_to_write = SBV_MIN(SBV_MIN(sb->count, n), buff_size-1);
     (void) memcpy(buff, sb->items, bytes_to_write);
     buff[bytes_to_write] = '\0';
-    return bytes_to_write;
+    return bytes_to_write + 1;
 }
 
 SBVDEF char* sb_to_cstr(const sb_t *sb)
@@ -378,22 +428,22 @@ SBVDEF char* sb_to_cstr(const sb_t *sb)
 
     (void) memcpy(string, sb->items, sb->count);
     string[sb->count] = '\0';
-    
+
     return string;
 }
 
 SBVDEF char* sb_detach(sb_t *sb)
 {
     if (sb == NULL) return NULL;
-    
+
     if (sb_append_null(sb) == -1 && sb->items != NULL){
         sb->items[sb->count] = '\0';
     }
     char *content = sb->items;
-    
+
     sb->items = NULL;
     sb->count = sb->capacity = 0;
-        
+
     return content;
 }
 
@@ -815,7 +865,7 @@ SBVDEF int sv_extract(sv_t sv, char *buff, size_t buff_size)
     size_t bytes_to_write = SBV_MIN(sv.len, buff_size-1);
     (void) memcpy(buff, sv.items, bytes_to_write);
     buff[bytes_to_write] = '\0';
-    return bytes_to_write;
+    return bytes_to_write + 1;
 }
 
 SBVDEF char* sv_to_cstr(sv_t sv)
