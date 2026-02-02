@@ -137,6 +137,8 @@ SBVDEF sv_t sv_null();
 SBVDEF sv_t sv_from_slice(const char *buff, size_t n);
 SBVDEF sv_t sv_from_cstr(const char *cstr);
 SBVDEF sv_t sv_from_sb(const sb_t *sb);
+SBVDEF sv_t sv_from_format(char *buff, size_t buff_size, const char *fmt, ...) SBV_PRINTF_FORMAT(3, 4);
+SBVDEF sv_t sv_from_vformat(char *buff, size_t buff_size, const char *fmt, va_list args);
 
 // comparison functions
 SBVDEF bool sv_empty(sv_t sv);
@@ -199,6 +201,27 @@ SBVDEF sv_t sv_trim_left_seq(sv_t sv, sv_t seq, size_t iterations);  // use SV_T
 SBVDEF sv_t sv_trim_right(sv_t sv);
 SBVDEF sv_t sv_trim_right_chars(sv_t sv, const char *chars);
 SBVDEF sv_t sv_trim_right_seq(sv_t sv, sv_t seq, size_t iterations); // use SV_TRIM_ALL to trim as often as possible
+
+// append two string views into a buffer
+// return the resulting string view, truncated if necessary, always null-terminated if buff_size > 0
+SBVDEF sv_t sv_append(sv_t a, sv_t b, char* buff, size_t buff_size);
+// append multiple string views into a buffer
+// return the resulting string view, truncated if necessary, always null-terminated if buff_size > 0
+SBVDEF sv_t sv_append_many(const sv_t *svs, size_t count, char *buff, size_t buff_size);
+// compute the total length of multiple string views concatenated
+SBVDEF size_t sv_append_many_len(const sv_t *svs, size_t count);
+
+// join multiple string views with a separator into a buffer
+// return the resulting string view, truncated if necessary, always null-terminated if buff_size > 0
+SBVDEF sv_t sv_join(const sv_t *svs, size_t count, sv_t sep, char *buff, size_t buff_size);
+// compute the total length of a join operation with a separator
+SBVDEF size_t sv_join_len(const sv_t *svs, size_t count, sv_t sep);
+
+// replace all occurrences of a query in a string view and write into a buffer
+// return the resulting string view, truncated if necessary, always null-terminated if buff_size > 0
+SBVDEF sv_t sv_replace(sv_t sv, sv_t query, sv_t replace, char *buff, size_t buff_size);
+// compute the total length of a replacement operation
+SBVDEF size_t sv_replace_len(sv_t sv, sv_t query, sv_t replace);
 
 // write a string view's content as a null-terminated string into a buffer
 // return the amount of bytes written (including the null-terminator), or a negative value on error
@@ -484,6 +507,28 @@ SBVDEF sv_t sv_from_sb(const sb_t *sb)
     return sv_from_slice(sb->items, sb->count);
 }
 
+SBVDEF sv_t sv_from_format(char *buff, size_t buff_size, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+
+    sv_t result = sv_from_vformat(buff, buff_size, fmt, args);
+
+    va_end(args);
+    return result;
+}
+
+SBVDEF sv_t sv_from_vformat(char *buff, size_t buff_size, const char *fmt, va_list args)
+{
+    if (buff == NULL || fmt == NULL) return sv_null();
+    if (buff_size == 0) return sv_from_slice(buff, 0);
+
+    int bytes_written = vsnprintf(buff, buff_size, fmt, args);
+    size_t total_bytes = (bytes_written < 0)? 0 : SBV_MIN((size_t) bytes_written, buff_size-1);
+    buff[total_bytes] = '\0';
+    return sv_from_slice(buff, total_bytes);
+}
+
 SBVDEF bool sv_isnull(sv_t sv)
 {
     return sv.items == NULL;
@@ -689,7 +734,7 @@ SBVDEF sv_t sv_split(sv_t sv, sv_t del, sv_t *rest)
         return sv;
     }
 
-    for (size_t i = 0; i + del.len <= sv.len; ++i) {
+    for (size_t i=0; i + del.len <= sv.len; ++i) {
         if (memcmp(sv.items + i, del.items, del.len) == 0) {
             if (rest) *rest = sv_from_slice(sv.items + i + del.len, sv.len - i - del.len);
             return sv_from_slice(sv.items, i);
@@ -722,7 +767,6 @@ SBVDEF sv_t sv_split_case(sv_t sv, sv_t del, sv_t *rest)
     if (rest) *rest = sv_null();
     return sv;
 }
-
 
 SBVDEF sv_t sv_split_char(sv_t sv, char del, sv_t *rest)
 {
@@ -859,8 +903,117 @@ SBVDEF sv_t sv_trim_right_seq(sv_t sv, sv_t seq, size_t iterations)
     return sv;
 }
 
+SBVDEF sv_t sv_append(sv_t a, sv_t b, char *buff, size_t buff_size)
+{
+    if (buff == NULL) return sv_null();
+    if (buff_size == 0) return sv_from_slice(buff, 0);
+    sv_t svs[] = {a, b};
+    return sv_append_many(svs, sizeof(svs)/sizeof(svs[0]), buff, buff_size);
+}
+
+SBVDEF sv_t sv_append_many(const sv_t *svs, size_t count, char *buff, size_t buff_size)
+{
+    if (buff == NULL || svs == NULL) return sv_null();
+    if (buff_size == 0) return sv_from_slice(buff, 0);
+
+    size_t bytes_used = 0;
+
+    for (size_t i=0; i<count; ++i){
+        int bytes_written = sv_extract(svs[i], buff + bytes_used, buff_size - bytes_used);
+        if (bytes_written < 0) break;
+        bytes_used += (size_t) bytes_written - 1;
+        if (bytes_used >= buff_size - 1) break;
+    }
+    size_t total_bytes = SBV_MIN(bytes_used, buff_size - 1);
+    buff[total_bytes] = '\0';
+    return sv_from_slice(buff, total_bytes);
+}
+
+SBVDEF size_t sv_append_many_len(const sv_t *svs, size_t count)
+{
+    if (svs == NULL || count == 0) return 0;
+    size_t total_len = 0;
+    for (size_t i=0; i<count; ++i){
+        total_len += svs[i].len;
+    }
+    return total_len;
+}
+
+SBVDEF sv_t sv_join(const sv_t *svs, size_t count, sv_t sep, char *buff, size_t buff_size)
+{
+    if (buff == NULL || svs == NULL) return sv_null();
+    if (buff_size == 0) return sv_from_slice(buff, 0);
+
+    size_t bytes_used = 0;
+    for (size_t i=0; i<count; ++i){
+        sv_t it = svs[i];
+        int bytes_written = sv_extract(it, buff + bytes_used, buff_size - bytes_used);
+        if (bytes_written < 0) break;
+        bytes_used += (size_t) bytes_written - 1;
+        if (bytes_used >= buff_size - 1) break;
+
+        if (i < count-1){
+            bytes_written = sv_extract(sep, buff + bytes_used, buff_size - bytes_used);
+            if (bytes_written < 0) break;
+            bytes_used += (size_t) bytes_written - 1;
+            if (bytes_used >= buff_size - 1) break;
+        }
+    }
+    size_t total_bytes = SBV_MIN(bytes_used, buff_size - 1);
+    buff[total_bytes] = '\0';
+    return sv_from_slice(buff, total_bytes);
+}
+
+SBVDEF size_t sv_join_len(const sv_t *svs, size_t count, sv_t sep)
+{
+    if (svs == NULL || count == 0) return 0;
+    size_t total_len = 0;
+    for (size_t i=0; i<count-1; ++i){
+        total_len += svs[i].len + sep.len;
+    }
+    return total_len + svs[count-1].len;
+}
+
+SBVDEF sv_t sv_replace(sv_t sv, sv_t query, sv_t replace, char *buff, size_t buff_size)
+{
+    if (buff == NULL) return sv_null();
+    if (buff_size == 0) return sv_from_slice(buff, 0);
+
+    size_t bytes_used = 0;
+    for (sv_t rest = sv, part = sv_split(rest, query, &rest); part.items != NULL; part = sv_split(rest, query, &rest)){
+
+        int bytes_written = sv_extract(part, buff + bytes_used, buff_size - bytes_used);
+        if (bytes_written < 0) break;
+        bytes_used += (size_t) bytes_written - 1;
+        if (bytes_used >= buff_size - 1) break;
+
+        if (!sv_isnull(rest)){
+            bytes_written = sv_extract(replace, buff + bytes_used, buff_size - bytes_used);
+            if (bytes_written < 0) break;
+            bytes_used += (size_t) bytes_written - 1;
+            if (bytes_used >= buff_size - 1) break;
+        }
+    }
+    size_t total_bytes = SBV_MIN(bytes_used, buff_size - 1);
+    buff[total_bytes] = '\0';
+    return sv_from_slice(buff, total_bytes);
+}
+
+SBVDEF size_t sv_replace_len(sv_t sv, sv_t query, sv_t replace)
+{
+    size_t total_len = 0;
+    for (sv_t rest = sv, part = sv_split(rest, query, &rest); part.items != NULL; part = sv_split(rest, query, &rest)){
+        total_len += part.len;
+        if (!sv_isnull(rest)){
+            total_len += replace.len;
+        }
+    }
+    return total_len;
+}
+
 SBVDEF int sv_extract(sv_t sv, char *buff, size_t buff_size)
 {
+    if (buff == NULL || sv_isnull(sv)) return -1;
     if (buff_size == 0) return 0;
     size_t bytes_to_write = SBV_MIN(sv.len, buff_size-1);
     (void) memcpy(buff, sv.items, bytes_to_write);
