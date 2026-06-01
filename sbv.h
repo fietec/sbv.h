@@ -14,7 +14,7 @@
 #include <ctype.h>
 
 #ifndef SBVDEF
-#define SBVDEF static inline
+#define SBVDEF
 #endif // SBVDEF
 
 #ifndef SBV_MALLOC
